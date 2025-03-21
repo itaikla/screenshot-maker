@@ -7,11 +7,9 @@ from openai import OpenAI
 
 from utils import send_telegram_message
 
-# Configuration
 load_dotenv()
 
-TOPICS = ["AI"]
-# TOPICS = ["AI", "Stock Market", "Quantum Computing"]
+TOPICS = ["AI", "Stock Market", "Quantum Computing"]
 
 NEWS_API_KEY = os.getenv('NEWS_API_KEY')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
@@ -36,64 +34,74 @@ def fetch_news(topic, count=SUMMARY_LENGTH):
         print(f"Exception when fetching news for {topic}: {str(e)}")
         return []
 
-def get_chatgpt_summary(articles):
-    """Get a concise summary of articles using ChatGPT"""
-    if not articles:
-        return "No recent news found."
-    
-    articles_text = "\n\n".join([
-        f"Title: {article.get('title', '')}\nDescription: {article.get('description', '')}"
-        for article in articles
-    ])
-    
+def generate_content_with_openai(prompt, content, creative_mode=False):
+    """Generic function to generate content using OpenAI with optional creative elements"""
     try:
-        print("Attempting to create OpenAI API call...")
-        print(f"Articles text length: {len(articles_text)}")
+        base_prompt = prompt
+        if creative_mode:
+            base_prompt += "\nBe creative and feel free to add metaphors, analogies, or interesting perspectives. You can include emojis, word play, or cultural references when appropriate."
+        
+        # TODO: Make it dynmically defined by user
+        base_prompt += "\nIMPORTANT: Your response must be limited to a maximum of 4 short paragraphs."
+        
         completion = client.chat.completions.create(
             model="gpt-4o-mini",
             store=True,
             messages=[
-                {"role": "system", "content": "Could you please act as a news summarizer. Please provide a concise 2-3 sentence summary of the following news articles. Please translate the summary to Hebrew."},
-                {"role": "user", "content": articles_text}
+                {"role": "system", "content": base_prompt},
+                {"role": "user", "content": content}
             ],
+            max_tokens=500  # Limit token length for shorter responses
         )
         return completion.choices[0].message.content.strip()
     except Exception as e:
         print(f"Detailed error in get_chatgpt_summary: {str(e)}")
         return "Error generating summary."
 
-def create_summary(articles, topic):
-    """Create a summary of news articles"""
-    if not articles:
-        return f"No recent news found for {topic}."
+def format_message(title, content, date=None):
+    """Generic function to format messages"""
+    if date is None:
+        date = datetime.now().strftime("%A, %B %d, %Y")
     
-    # Get ChatGPT summary
-    chatgpt_summary = get_chatgpt_summary(articles)
-    
-    summary = f"📰 *Latest {topic} Summary*\n\n"
-    summary += f"{chatgpt_summary}\n\n"
+    message = f"*{title}*\n{date}\n\n{content}\n\n"
+    return message
 
-    return summary
-
-# TODO: Split it. Don't do 2 things in same function
-def generate_and_send_news_summary():
-    """Main function to generate and send news summaries"""
-    current_date = datetime.now().strftime("%A, %B %d, %Y")
-    full_message = f"*Daily News Summary*\n{current_date}\n\n"
-    
-    for topic in TOPICS:
-        articles = fetch_news(topic)
-        topic_summary = create_summary(articles, topic)
-        full_message += topic_summary + "\n"
-    
-    # Split message if too long (WhatsApp has a character limit)
-    if len(full_message) > 4096:
-        messages = [full_message[i:i+4000] for i in range(0, len(full_message), 4000)]
+def send_message(message):
+    """Generic function to send messages"""
+    if len(message) > 4096:
+        messages = [message[i:i+4000] for i in range(0, len(message), 4000)]
         for msg in messages:
             send_telegram_message(msg)
             time.sleep(1)
     else:
-        send_telegram_message(full_message)
+        send_telegram_message(message)
+
+
+def generate_and_send_news_summary():
+    """News-specific implementation using generic functions"""
+    articles_by_topic = {topic: fetch_news(topic) for topic in TOPICS}
+    
+    all_summaries = []
+    for topic, articles in articles_by_topic.items():
+        if articles:
+            articles_text = "\n\n".join([
+                f"Title: {article.get('title', '')}\nDescription: {article.get('description', '')}"
+                for article in articles
+            ])
+            
+            prompt = "Please be a news summarizer. Please provide a concise 2-3 sentence summary of the following news articles. Please translate the summary to Hebrew."
+            summary = generate_content_with_openai(prompt, articles_text)
+            all_summaries.append(f"📰 *Latest {topic} Summary*\n\n{summary}")
+    
+    full_content = "\n".join(all_summaries)
+    formatted_message = format_message("Daily News Summary", full_content)
+    send_message(formatted_message)
+
+def generate_and_send_custom_content(title, prompt, content, creative=True):
+    generated_content = generate_content_with_openai(prompt, content, creative_mode=creative)
+    formatted_message = format_message(title, generated_content)
+    send_message(formatted_message)
+
 
 if __name__ == "__main__":
     generate_and_send_news_summary()

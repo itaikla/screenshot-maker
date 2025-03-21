@@ -16,12 +16,11 @@ TOPICS = ["AI"]
 NEWS_API_KEY = os.getenv('NEWS_API_KEY')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
-SUMMARY_LENGTH = 5  # Number of news items per topic
+SUMMARY_LENGTH = 4  # Number of news items per topic
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 def fetch_news(topic, count=SUMMARY_LENGTH):
-    print(NEWS_API_KEY)
     url = f"https://newsapi.org/v2/everything?q={topic}&sortBy=publishedAt&pageSize={count}&apiKey={NEWS_API_KEY}&language=en"
     
     try:
@@ -54,14 +53,13 @@ def get_chatgpt_summary(articles):
             model="gpt-4o-mini",
             store=True,
             messages=[
-                {"role": "system", "content": "You are a news summarizer. Please provide a concise 2-3 sentence summary of the following news articles."},
+                {"role": "system", "content": "Could you please act as a news summarizer. Please provide a concise 2-3 sentence summary of the following news articles. Please translate the summary to Hebrew."},
                 {"role": "user", "content": articles_text}
             ],
         )
         return completion.choices[0].message.content.strip()
     except Exception as e:
         print(f"Detailed error in get_chatgpt_summary: {str(e)}")
-        print(f"Error type: {type(e)}")
         return "Error generating summary."
 
 def create_summary(articles, topic):
@@ -74,28 +72,7 @@ def create_summary(articles, topic):
     
     summary = f"📰 *Latest {topic} Summary*\n\n"
     summary += f"{chatgpt_summary}\n\n"
-    # summary += "*Source Articles:*\n"
-    
-    # for i, article in enumerate(articles[:SUMMARY_LENGTH], 1):
-    #     title = article.get("title", "No title")
-    #     source = article.get("source", {}).get("name", "Unknown source")
-    #     published = article.get("publishedAt", "")
-    #     url = article.get("url", "")
-        
-    #     # Format the date if available
-    #     if published:
-    #         try:
-    #             pub_date = datetime.strptime(published, "%Y-%m-%dT%H:%M:%SZ")
-    #             date_str = pub_date.strftime("%b %d, %Y")
-    #         except:
-    #             date_str = published
-    #     else:
-    #         date_str = "Recent"
-        
-    #     summary += f"{i}. {title}\n"
-    #     summary += f"   Source: {source} | {date_str}\n"
-    #     summary += f"   Read more: {url}\n\n"
-    
+
     return summary
 
 # TODO: Split it. Don't do 2 things in same function
